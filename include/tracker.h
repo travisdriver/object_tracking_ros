@@ -25,7 +25,7 @@ using namespace std;
 class Tracker
 {
 public:
-    //ros::NodeHandle nh;
+    //
     //image_transport::ImageTransport it;
     //image_transport::Subscriber img_sub;
 

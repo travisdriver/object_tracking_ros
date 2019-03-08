@@ -111,10 +111,6 @@ int main(int argc, char** argv)
 
     while(ros::ok())
     {
-        //Mat frame, H;
-	Mat H;
-        //cap >> frame; // get a new frame from camera
-	
 	ros::spinOnce();
         //tracker.calcMatches();//frame);
 
@@ -144,7 +140,9 @@ int main(int argc, char** argv)
 	//{
 	//    cout << "Empty image" << endl;
 	//}
-
+	Mat outImg;
+	cv::resize(tracker.getCurrentFrame(), outImg, cv::Size(), 0.33, 0.33);
+    	imshow("test", outImg);
     }
 
     // the camera will be deinitialized automatically in VideoCapture destructor

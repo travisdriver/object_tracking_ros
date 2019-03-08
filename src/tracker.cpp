@@ -157,7 +157,7 @@ void Tracker::drawFrameAxes()
     line( frm_img, projectedPts[0], projectedPts[3], Scalar( 0, 0, 255), 3 ); // z red
 }
 
-void Tracker::acquirePixelImage(const sensor_msgs::ImageConstPtr& msg)
+void Tracker::acquirePixelImage(const sensor_msgs::ImageConstPtr& image)
 {
     //cout << "Received image!" << endl;
     //cv_bridge::CvImagePtr cv_ptr;
@@ -171,11 +171,7 @@ void Tracker::acquirePixelImage(const sensor_msgs::ImageConstPtr& msg)
         return;
     }
     
-    cv::Mat &test = cv_ptr->image;
     frm_img = cv_ptr->image.clone(); // get a new frame from camera
-    //imshow("test",getCurrentFrame());
-    //waitKey(2);
-
     calcMatches();//frame);
 
     cout << getMatches() << endl;
@@ -190,10 +186,10 @@ void Tracker::acquirePixelImage(const sensor_msgs::ImageConstPtr& msg)
         drawFrameAxes();
 
     }
-    Mat outImg;
-    cv::resize(getCurrentFrame(), outImg, cv::Size(), 0.33, 0.33);
-    imshow("test", outImg);
-    waitKey(2);
+    //Mat outImg;
+    //cv::resize(getCurrentFrame(), outImg, cv::Size(), 0.33, 0.33);
+    //imshow("test", outImg);
+    //waitKey(2);
 }
 
 Ptr<Feature2D> Tracker::getDetector() { return detector; }
@@ -211,3 +207,77 @@ Mat Tracker::getPoseRVec() { return rvec; }
 //Mat Tracker::getPoseQuat() { return; }
 
 Mat Tracker::getCurrentFrame() { return frm_img; }
+
+
+int main(int argc, char** argv)
+{
+
+    ros::init(argc,argv,"object_tracker");
+
+    // create detector and orb_matcher
+    Ptr<Feature2D> detector = ORB::create();
+    //Ptr<Feature2D> detector = cv::xfeatures2d::SIFT::create(500);
+    //Ptr<SURF> detector = SURF::create(500);
+    Ptr<DescriptorMatcher> matcher = DescriptorMatcher::create("BruteForce-Hamming");
+    //Ptr<DescriptorMatcher> matcher = DescriptorMatcher::create(DescriptorMatcher::FLANNBASED);
+
+    // initialize reference image
+    Mat ref_img;
+    ref_img = imread("/home/travisdriver/catkin_ws/src/object-tracking-master/imgs/ida_pixelink.jpg");
+    imshow("ref",ref_img);
+    waitKey(0);
+
+    // initialize tracker
+    Tracker tracker(detector, matcher);
+    tracker.setReferenceImg(ref_img);
+
+    // attempt to read pixelink image
+    cout << "test" << endl;
+    ros::NodeHandle nh;
+    image_transport::ImageTransport it(nh);
+    image_transport::Subscriber img_sub;
+    cout << "sub" << endl;
+    img_sub = it.subscribe("/pixelink/image", 1, &Tracker::acquirePixelImage, &tracker);
+    ros::spinOnce();
+
+    while(ros::ok())
+    {
+        ros::spinOnce();
+        //tracker.calcMatches();//frame);
+
+        //cout << tracker.getMatches() << endl;
+        //if (tracker.getMatches() > 50)
+        //{
+        //    tracker.getRelativePose();
+
+        //    cout << "rvec: " << tracker.getPoseRVec()*180./M_PI << endl;
+        //    cout << "tvec: " << tracker.getPoseTVec() << endl;
+
+        //    tracker.drawMyBoundingBox();
+        //    tracker.drawFrameAxes();
+
+        //}
+
+        //Mat frame = tracker.getCurrentFrame();
+        //cv::Size s = frame.size();
+        //int rows = s.height;
+        //cout << "result" << endl;
+        //if (rows > 0)
+        //{
+        //    imshow("Tracking", frame);
+        //    if(waitKey(30) >= 0) break;
+        //}
+        //else
+        //{
+        //    cout << "Empty image" << endl;
+        //}
+        Mat outImg;
+        cv::resize(tracker.getCurrentFrame(), outImg, cv::Size(), 0.33, 0.33);
+        imshow("test", outImg);
+    }
+
+    // the camera will be deinitialized automatically in VideoCapture destructor
+    return 0;
+}
+
+

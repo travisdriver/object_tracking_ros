@@ -45,7 +45,7 @@ include_directories(
 #add_definitions(-DPIXELINK_LINUX)
 
 add_executable(object_tracking_node
-               src/object_tracking_ros.cpp
+	#src/object_tracking_ros.cpp
                src/tracker.cpp)
 
 set(EXEC_LIST object_tracking_node)
