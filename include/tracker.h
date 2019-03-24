@@ -25,9 +25,13 @@ using namespace std;
 class Tracker
 {
 public:
-    //
-    //image_transport::ImageTransport it;
-    //image_transport::Subscriber img_sub;
+    // ros stuff
+    //image_transport::ImageTransport it_;
+    //image_transport::Subscriber image_sub_;
+    //image_transport::Publisher image_pub_;
+    //ros::NodeHandle nh_;
+    sensor_msgs::ImageConstPtr imageIn_;
+    cv_bridge::CvImagePtr imageOut_;
 
     // constructor
     Tracker(Ptr<Feature2D> _detector, Ptr<DescriptorMatcher> _matcher);

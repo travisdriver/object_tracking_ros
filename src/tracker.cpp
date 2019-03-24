@@ -17,12 +17,20 @@ const Mat CAMERA_MAT = (Mat1d(3, 3) << 1158.03, 0.,      540.,
                                          0.,      0.,      1.  );
 const Mat DIST_COEFFS = (Mat1d(1, 4) << 0., 0., 0., 0.);
 
+image_transport::Subscriber img_sub;
+image_transport::Subscriber img_sub2;
+image_transport::Publisher img_pub;
+sensor_msgs::ImagePtr msg;
+Mat outImg;
+
 Tracker::Tracker(Ptr<Feature2D> _detector, Ptr<DescriptorMatcher> _matcher)
 {
     detector = _detector;
     matcher = _matcher;
     //initializeSubscribers();
     nmatches = 0;
+    //image_sub_ = it_.subscribe("/pixelink/image", 1, &Tracker::acquirePixelImage, this);
+    //image_pub_ = it_.advertise("/image_converter/output_video", 1);
 }
 
 //void Tracker::initializeSubscribers()
@@ -157,41 +165,6 @@ void Tracker::drawFrameAxes()
     line( frm_img, projectedPts[0], projectedPts[3], Scalar( 0, 0, 255), 3 ); // z red
 }
 
-void Tracker::acquirePixelImage(const sensor_msgs::ImageConstPtr& image)
-{
-    //cout << "Received image!" << endl;
-    //cv_bridge::CvImagePtr cv_ptr;
-    try
-    {
-        cv_ptr = cv_bridge::toCvCopy(msg, sensor_msgs::image_encodings::BGR8);
-    }
-    catch (cv_bridge::Exception& e)
-    {
-        ROS_ERROR("cv_bridge exception: %s", e.what());
-        return;
-    }
-    
-    frm_img = cv_ptr->image.clone(); // get a new frame from camera
-    calcMatches();//frame);
-
-    cout << getMatches() << endl;
-    if (getMatches() > 20)
-    {
-        getRelativePose();
-
-        cout << "rvec: " << getPoseRVec()*180./M_PI << endl;
-        cout << "tvec: " << getPoseTVec() << endl;
-
-        drawMyBoundingBox();
-        drawFrameAxes();
-
-    }
-    //Mat outImg;
-    //cv::resize(getCurrentFrame(), outImg, cv::Size(), 0.33, 0.33);
-    //imshow("test", outImg);
-    //waitKey(2);
-}
-
 Ptr<Feature2D> Tracker::getDetector() { return detector; }
 
 int Tracker::getMatches() { return nmatches; }
@@ -208,6 +181,67 @@ Mat Tracker::getPoseRVec() { return rvec; }
 
 Mat Tracker::getCurrentFrame() { return frm_img; }
 
+void Tracker::acquirePixelImage(const sensor_msgs::ImageConstPtr& image)
+{
+    //cout << "Received image!" << endl;
+    //cv_bridge::CvImagePtr cv_ptr;
+    imageIn_ = image;
+    try
+    {
+        imageOut_ = cv_bridge::toCvCopy(imageIn_, sensor_msgs::image_encodings::BGR8);
+    }
+    catch (cv_bridge::Exception& e)
+    {
+        ROS_ERROR("cv_bridge exception: %s", e.what());
+        return;
+    }
+    
+    frm_img = imageOut_->image.clone(); // get a new frame from pixelink
+    calcMatches();
+
+    cout << getMatches() << endl;
+    if (getMatches() > 20)
+    {
+        getRelativePose();
+
+        cout << "rvec: " << getPoseRVec()*180./M_PI << endl;
+        cout << "tvec: " << getPoseTVec() << endl;
+
+        drawMyBoundingBox();
+        drawFrameAxes();
+
+    }
+
+    // show image
+    cv::resize(getCurrentFrame(), outImg, cv::Size(), 0.33, 0.33);
+    imshow("Results", outImg);
+    waitKey(2);
+    
+    // publish image
+    msg = cv_bridge::CvImage(std_msgs::Header(), "bgr8", outImg).toImageMsg();
+    img_pub.publish(msg);
+}
+
+void testCallback(const sensor_msgs::ImageConstPtr& image)
+{
+    //cout << "Received image!" << endl;
+    cv_bridge::CvImagePtr cv_ptr;
+    try
+    {
+        cv_ptr = cv_bridge::toCvCopy(image, sensor_msgs::image_encodings::BGR8);
+    }
+    catch (cv_bridge::Exception& e)
+    {
+        ROS_ERROR("cv_bridge exception: %s", e.what());
+        return;
+    }
+    
+    Mat myimg = cv_ptr->image.clone(); // get a new frame from pixelink
+
+    // show image
+    imshow("pub", myimg);
+    waitKey(2);
+}
 
 int main(int argc, char** argv)
 {
@@ -223,7 +257,7 @@ int main(int argc, char** argv)
 
     // initialize reference image
     Mat ref_img;
-    ref_img = imread("/home/travisdriver/catkin_ws/src/object-tracking-master/imgs/ida_pixelink.jpg");
+    ref_img = imread("/home/travisdriver/catkin_ws/src/object_tracking_ros/imgs/ida_pixelink_temp.jpg");
     imshow("ref",ref_img);
     waitKey(0);
 
@@ -235,46 +269,12 @@ int main(int argc, char** argv)
     cout << "test" << endl;
     ros::NodeHandle nh;
     image_transport::ImageTransport it(nh);
-    image_transport::Subscriber img_sub;
-    cout << "sub" << endl;
     img_sub = it.subscribe("/pixelink/image", 1, &Tracker::acquirePixelImage, &tracker);
-    ros::spinOnce();
+    img_pub = it.advertise("/object_tracking_ros/image", 1);
+    img_sub2 = it.subscribe("object_tracking_ros/image", 1, testCallback);
 
-    while(ros::ok())
-    {
-        ros::spinOnce();
-        //tracker.calcMatches();//frame);
-
-        //cout << tracker.getMatches() << endl;
-        //if (tracker.getMatches() > 50)
-        //{
-        //    tracker.getRelativePose();
-
-        //    cout << "rvec: " << tracker.getPoseRVec()*180./M_PI << endl;
-        //    cout << "tvec: " << tracker.getPoseTVec() << endl;
-
-        //    tracker.drawMyBoundingBox();
-        //    tracker.drawFrameAxes();
-
-        //}
-
-        //Mat frame = tracker.getCurrentFrame();
-        //cv::Size s = frame.size();
-        //int rows = s.height;
-        //cout << "result" << endl;
-        //if (rows > 0)
-        //{
-        //    imshow("Tracking", frame);
-        //    if(waitKey(30) >= 0) break;
-        //}
-        //else
-        //{
-        //    cout << "Empty image" << endl;
-        //}
-        Mat outImg;
-        cv::resize(tracker.getCurrentFrame(), outImg, cv::Size(), 0.33, 0.33);
-        imshow("test", outImg);
-    }
+    // run tracker and publish results
+    ros::spin();
 
     // the camera will be deinitialized automatically in VideoCapture destructor
     return 0;
