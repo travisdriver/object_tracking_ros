@@ -12,14 +12,21 @@ using namespace std;
 
 const double NN_MATCH_RATIO = 0.75f; // nearest-neighbour matching ratio
 const double RANSAC_THRESH  = 2.5f;  // RANSAC inlier threshold
-const Mat CAMERA_MAT = (Mat1d(3, 3) << 1158.03, 0.,      540.,
-                                         0.,      1158.03, 360.,
-                                         0.,      0.,      1.  );
-const Mat DIST_COEFFS = (Mat1d(1, 4) << 0., 0., 0., 0.);
+//const Mat CAMERA_MAT = (Mat1d(3, 3) << 1158.03, 0.,      540.,
+//                                         0.,      1158.03, 360.,
+//                                         0.,      0.,      1.  );
+//const Mat DIST_COEFFS = (Mat1d(1, 4) << 0., 0., 0., 0.);
+const Mat CAMERA_MAT = (Mat1d(3, 3) << 2373.287987, 0.000000, 1193.920583,
+				       0.000000, 2371.300868, 1096.973512,
+				       0.000000, 0.000000, 1.000000);
+ 
+const Mat DIST_COEFFS = (Mat1d(1, 4) << -0.299861, 0.247257, 0.003340, -0.000833, 0.000000);
+
 
 image_transport::Subscriber img_sub;
 image_transport::Subscriber img_sub2;
 image_transport::Publisher img_pub;
+ros::Publisher pose_pub;
 sensor_msgs::ImagePtr msg;
 Mat outImg;
 
@@ -177,7 +184,34 @@ Mat Tracker::getPoseTVec() { return tvec; }
 
 Mat Tracker::getPoseRVec() { return rvec; }
 
-//Mat Tracker::getPoseQuat() { return; }
+geometry_msgs::Pose Tracker::getPose() 
+{
+    geometry_msgs::Pose p;
+    double rx = rvec.at<double>(0,0);
+    double ry = rvec.at<double>(1,0);
+    double rz = rvec.at<double>(2,0);
+    double theta = (double)(sqrt(rx*rx + ry*ry + rz*rz));
+    
+    // normalize axis and convert theta to radians
+    rx /= theta;
+    ry /= theta;
+    rz /= theta;
+    theta *= 180/M_PI;
+    
+    // axis-angle to quaternion and add to pose
+    double s = sin(theta/2);
+    p.orientation.x = rx * s;
+    p.orientation.y = ry * s;
+    p.orientation.z = rz * s;
+    p.orientation.w = cos(theta/2);
+
+    // add relative position to pose
+    p.position.x = tvec.at<double>(0,0);;
+    p.position.y = tvec.at<double>(1,0);;
+    p.position.z = tvec.at<double>(2,0);;
+
+    return p; 
+}
 
 Mat Tracker::getCurrentFrame() { return frm_img; }
 
@@ -204,12 +238,11 @@ void Tracker::acquirePixelImage(const sensor_msgs::ImageConstPtr& image)
     {
         getRelativePose();
 
-        cout << "rvec: " << getPoseRVec()*180./M_PI << endl;
-        cout << "tvec: " << getPoseTVec() << endl;
+        cout << "rvec: " << getPoseRVec()*180./M_PI << endl; // radians
+        cout << "tvec: " << getPoseTVec()*0.00035 << endl; // mm
 
         drawMyBoundingBox();
         drawFrameAxes();
-
     }
 
     // show image
@@ -257,7 +290,7 @@ int main(int argc, char** argv)
 
     // initialize reference image
     Mat ref_img;
-    ref_img = imread("/home/travisdriver/catkin_ws/src/object_tracking_ros/imgs/ida_pixelink_temp.jpg");
+    ref_img = imread("/home/travisdriver/catkin_ws/src/object_tracking_ros/imgs/ida_pixelink.jpg");
     imshow("ref",ref_img);
     waitKey(0);
 
@@ -271,7 +304,8 @@ int main(int argc, char** argv)
     image_transport::ImageTransport it(nh);
     img_sub = it.subscribe("/pixelink/image", 1, &Tracker::acquirePixelImage, &tracker);
     img_pub = it.advertise("/object_tracking_ros/image", 1);
-    img_sub2 = it.subscribe("object_tracking_ros/image", 1, testCallback);
+    //img_sub2 = it.subscribe("object_tracking_ros/image", 1, testCallback);
+    pose_pub = nh.advertise<geometry_msgs::Pose>("object_tracking_ros/camera_pose",1);
 
     // run tracker and publish results
     ros::spin();

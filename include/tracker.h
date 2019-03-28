@@ -4,12 +4,16 @@
 #include <vector>
 #include <iostream>
 #include <iomanip>
+#include <math.h>
 
 //#include "tracker.h"
 #include <ros/ros.h>
 #include <cv_bridge/cv_bridge.h>
 #include <sensor_msgs/Image.h>
 #include <sensor_msgs/image_encodings.h>
+#include <geometry_msgs/Pose.h>
+#include <geometry_msgs/Vector3.h>
+#include <geometry_msgs/Quaternion.h>
 #include <image_transport/image_transport.h>
 #include <opencv2/highgui/highgui.hpp>
 #include <opencv2/imgproc/imgproc.hpp>
@@ -48,7 +52,7 @@ public:
     void framePerspectiveTransform();
     Mat getPoseTVec();
     Mat getPoseRVec();
-    //Mat getPoseQuat();
+    geometry_msgs::Pose getPose();
     void drawMyBoundingBox();
     void drawFrameAxes();
     Mat getCurrentFrame();

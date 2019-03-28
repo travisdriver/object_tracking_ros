@@ -6,13 +6,13 @@ add_compile_options(-std=c++11 -g -Wall)
 
 find_package(OpenCV REQUIRED)
 find_package(catkin REQUIRED COMPONENTS
+  geometry_msgs
   sensor_msgs
   cv_bridge
   std_msgs
   roscpp
   message_generation
   image_transport
-  #pixelink_ros
 )
 
 #set(PXL_LIB_PATH $ENV{PIXELINK_SDK_LIB})
@@ -25,6 +25,7 @@ generate_messages(DEPENDENCIES sensor_msgs
 )
 
 catkin_package(CATKIN_DEPENDS
+  geometry_msgs
   std_msgs
   sensor_msgs
   roscpp
