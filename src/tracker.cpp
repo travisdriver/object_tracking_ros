@@ -247,8 +247,8 @@ void Tracker::acquirePixelImage(const sensor_msgs::ImageConstPtr& image)
 
     // show image
     cv::resize(getCurrentFrame(), outImg, cv::Size(), 0.33, 0.33);
-    imshow("Results", outImg);
-    waitKey(2);
+    //imshow("Results", outImg);
+    //waitKey(2);
     
     // publish image
     msg = cv_bridge::CvImage(std_msgs::Header(), "bgr8", outImg).toImageMsg();
@@ -272,8 +272,8 @@ void testCallback(const sensor_msgs::ImageConstPtr& image)
     Mat myimg = cv_ptr->image.clone(); // get a new frame from pixelink
 
     // show image
-    imshow("pub", myimg);
-    waitKey(2);
+    //imshow("pub", myimg);
+    //waitKey(2);
 }
 
 int main(int argc, char** argv)
@@ -291,8 +291,8 @@ int main(int argc, char** argv)
     // initialize reference image
     Mat ref_img;
     ref_img = imread("/home/travisdriver/catkin_ws/src/object_tracking_ros/imgs/ida_pixelink.jpg");
-    imshow("ref",ref_img);
-    waitKey(0);
+    //imshow("ref",ref_img);
+    //waitKey(0);
 
     // initialize tracker
     Tracker tracker(detector, matcher);
