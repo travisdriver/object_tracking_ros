@@ -284,8 +284,15 @@ int main(int argc, char** argv)
 
     // initialize reference image
     Mat ref_img;
-    ref_img = imread("/home/travisdriver/catkin_ws/src/object_tracking_ros/imgs/ida_pixelink.jpg");
-
+		std::string img_path = ros::package::getPath("object_tracking_ros") + "/imgs/ida_pixelink.jpg";
+    //ref_img = imread("/home/travisdriver/catkin_ws/src/object_tracking_ros/imgs/ida_pixelink.jpg");
+		std::cout << img_path << std::endl;
+		ref_img = imread(img_path);
+		if(ref_img.empty())
+		{
+			std::cout << "empty reference image" << std::endl;
+			return 0;
+		}
 
     // initialize tracker
     Tracker tracker(detector, matcher);

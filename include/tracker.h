@@ -3,11 +3,13 @@
 #include <opencv2/opencv.hpp>
 #include <vector>
 #include <iostream>
+#include <string>
 #include <iomanip>
 #include <math.h>
 
 //#include "tracker.h"
 #include <ros/ros.h>
+#include <ros/package.h>
 #include <cv_bridge/cv_bridge.h>
 #include <sensor_msgs/Image.h>
 #include <sensor_msgs/image_encodings.h>
