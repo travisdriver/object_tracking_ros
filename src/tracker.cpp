@@ -1,10 +1,3 @@
-//#include <opencv2/features2d.hpp>
-//#include <opencv2/videoio.hpp>
-//#include <opencv2/opencv.hpp>
-//#include <vector>
-//#include <iostream>
-//#include <iomanip>
-
 #include "tracker.h"
 
 using namespace cv;
@@ -16,11 +9,11 @@ const double RANSAC_THRESH  = 2.5f;  // RANSAC inlier threshold
 //                                         0.,      1158.03, 360.,
 //                                         0.,      0.,      1.  );
 //const Mat DIST_COEFFS = (Mat1d(1, 4) << 0., 0., 0., 0.);
-const Mat CAMERA_MAT = (Mat1d(3, 3) << 2373.287987, 0.000000, 1193.920583,
-				       0.000000, 2371.300868, 1096.973512,
-				       0.000000, 0.000000, 1.000000);
- 
-const Mat DIST_COEFFS = (Mat1d(1, 4) << -0.299861, 0.247257, 0.003340, -0.000833, 0.000000);
+//const Mat CAMERA_MAT = (Mat1d(3, 3) << 2373.287987, 0.000000, 1193.920583,
+//				       0.000000, 2371.300868, 1096.973512,
+//				       0.000000, 0.000000, 1.000000);
+//
+//const Mat DIST_COEFFS = (Mat1d(1, 4) << -0.299861, 0.247257, 0.003340, -0.000833, 0.000000);
 
 
 image_transport::Subscriber img_sub;
@@ -34,18 +27,8 @@ Tracker::Tracker(Ptr<Feature2D> _detector, Ptr<DescriptorMatcher> _matcher)
 {
     detector = _detector;
     matcher = _matcher;
-    //initializeSubscribers();
     nmatches = 0;
-    //image_sub_ = it_.subscribe("/pixelink/image", 1, &Tracker::acquirePixelImage, this);
-    //image_pub_ = it_.advertise("/image_converter/output_video", 1);
 }
-
-//void Tracker::initializeSubscribers()
-//{
-//    it = it(nh);
-//    cout << "sub" << endl;
-//    img_sub = it.subscribe("/pixelink/image", 1, &Tracker::acquirePixelImage, this);
-//}
 
 
 void Tracker::setReferenceImg(const Mat img)
@@ -72,6 +55,12 @@ void Tracker::setReferenceImg(const Mat img)
     ref_center[0] = Point(ref_img.cols/2., ref_img.rows/2.);
 
     cout << ref_corners << endl;
+}
+
+void Tracker::setCameraParams(Mat cm, Mat dc)
+{
+		camera_matrix = cm;
+		dist_coeffs = dc;
 }
 
 void Tracker::calcMatches()//const Mat frame)
@@ -136,7 +125,7 @@ void Tracker::getRelativePose()
     perspectiveTransform(ref_center, frm_center, H);
 
     // solve PnP using iterative LMA
-    solvePnP(ref_corners_3d, frm_corners, CAMERA_MAT, DIST_COEFFS, rvec, tvec, 1, 1);
+    solvePnP(ref_corners_3d, frm_corners, camera_matrix, dist_coeffs, rvec, tvec, 1, 1);
 }
 
 void Tracker::drawMyBoundingBox()
@@ -164,7 +153,7 @@ void Tracker::drawFrameAxes()
 
     // project axis onto object in frame
     vector<Point2f> projectedPts;
-    projectPoints(axis, temp_rvec, tvec, CAMERA_MAT, DIST_COEFFS, projectedPts);
+    projectPoints(axis, temp_rvec, tvec, camera_matrix, dist_coeffs, projectedPts);
 
     // draw axis lines
     line( frm_img, projectedPts[0], projectedPts[1], Scalar( 255, 0, 0), 3 ); // x blue
@@ -184,20 +173,20 @@ Mat Tracker::getPoseTVec() { return tvec; }
 
 Mat Tracker::getPoseRVec() { return rvec; }
 
-geometry_msgs::Pose Tracker::getPose() 
+geometry_msgs::Pose Tracker::getPose()
 {
     geometry_msgs::Pose p;
     double rx = rvec.at<double>(0,0);
     double ry = rvec.at<double>(1,0);
     double rz = rvec.at<double>(2,0);
     double theta = (double)(sqrt(rx*rx + ry*ry + rz*rz));
-    
+
     // normalize axis and convert theta to radians
     rx /= theta;
     ry /= theta;
     rz /= theta;
     theta *= 180/M_PI;
-    
+
     // axis-angle to quaternion and add to pose
     double s = sin(theta/2);
     p.orientation.x = rx * s;
@@ -210,27 +199,30 @@ geometry_msgs::Pose Tracker::getPose()
     p.position.y = tvec.at<double>(1,0);;
     p.position.z = tvec.at<double>(2,0);;
 
-    return p; 
+    return p;
 }
 
 Mat Tracker::getCurrentFrame() { return frm_img; }
 
 void Tracker::acquirePixelImage(const sensor_msgs::ImageConstPtr& image)
 {
-    //cout << "Received image!" << endl;
+    cout << "Received image!" << endl;
     //cv_bridge::CvImagePtr cv_ptr;
-    imageIn_ = image;
+    //imageIn_ = image;
+		cv_bridge::CvImagePtr cv_ptr;
     try
     {
-        imageOut_ = cv_bridge::toCvCopy(imageIn_, sensor_msgs::image_encodings::BGR8);
+        //imageOut_ = cv_bridge::toCvCopy(imageIn_, sensor_msgs::image_encodings::BGR8);
+				cv_ptr = cv_bridge::toCvCopy(image, sensor_msgs::image_encodings::BGR8);
+
     }
     catch (cv_bridge::Exception& e)
     {
         ROS_ERROR("cv_bridge exception: %s", e.what());
         return;
     }
-    
-    frm_img = imageOut_->image.clone(); // get a new frame from pixelink
+
+    frm_img = cv_ptr->image.clone(); // get a new frame from pixelink
     calcMatches();
 
     cout << getMatches() << endl;
@@ -246,10 +238,8 @@ void Tracker::acquirePixelImage(const sensor_msgs::ImageConstPtr& image)
     }
 
     // show image
-    cv::resize(getCurrentFrame(), outImg, cv::Size(), 0.33, 0.33);
-    //imshow("Results", outImg);
-    //waitKey(2);
-    
+    cv::resize(frm_img, outImg, cv::Size(), 0.33, 0.33);
+
     // publish image
     msg = cv_bridge::CvImage(std_msgs::Header(), "bgr8", outImg).toImageMsg();
     img_pub.publish(msg);
@@ -268,12 +258,12 @@ void testCallback(const sensor_msgs::ImageConstPtr& image)
         ROS_ERROR("cv_bridge exception: %s", e.what());
         return;
     }
-    
+
     Mat myimg = cv_ptr->image.clone(); // get a new frame from pixelink
 
     // show image
-    //imshow("pub", myimg);
-    //waitKey(2);
+    imshow("pub", myimg);
+    waitKey(2);
 }
 
 int main(int argc, char** argv)
@@ -283,20 +273,24 @@ int main(int argc, char** argv)
 
     // create detector and orb_matcher
     Ptr<Feature2D> detector = ORB::create();
-    //Ptr<Feature2D> detector = cv::xfeatures2d::SIFT::create(500);
-    //Ptr<SURF> detector = SURF::create(500);
     Ptr<DescriptorMatcher> matcher = DescriptorMatcher::create("BruteForce-Hamming");
-    //Ptr<DescriptorMatcher> matcher = DescriptorMatcher::create(DescriptorMatcher::FLANNBASED);
+
+		// camera params
+		Mat CAMERA_MAT = (Mat1d(3, 3) << 2373.287987, 0.000000, 1193.920583,
+						       0.000000, 2371.300868, 1096.973512,
+						       0.000000, 0.000000, 1.000000);
+
+		Mat DIST_COEFFS = (Mat1d(1, 4) << -0.299861, 0.247257, 0.003340, -0.000833, 0.000000);
 
     // initialize reference image
     Mat ref_img;
     ref_img = imread("/home/travisdriver/catkin_ws/src/object_tracking_ros/imgs/ida_pixelink.jpg");
-    //imshow("ref",ref_img);
-    //waitKey(0);
+
 
     // initialize tracker
     Tracker tracker(detector, matcher);
     tracker.setReferenceImg(ref_img);
+		tracker.setCameraParams(CAMERA_MAT, DIST_COEFFS);
 
     // attempt to read pixelink image
     cout << "test" << endl;
@@ -304,7 +298,7 @@ int main(int argc, char** argv)
     image_transport::ImageTransport it(nh);
     img_sub = it.subscribe("/pixelink/image", 1, &Tracker::acquirePixelImage, &tracker);
     img_pub = it.advertise("/object_tracking_ros/image", 1);
-    //img_sub2 = it.subscribe("object_tracking_ros/image", 1, testCallback);
+    img_sub2 = it.subscribe("object_tracking_ros/image", 1, testCallback);
     pose_pub = nh.advertise<geometry_msgs::Pose>("object_tracking_ros/camera_pose",1);
 
     // run tracker and publish results
@@ -313,5 +307,3 @@ int main(int argc, char** argv)
     // the camera will be deinitialized automatically in VideoCapture destructor
     return 0;
 }
-
-

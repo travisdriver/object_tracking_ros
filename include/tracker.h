@@ -29,14 +29,6 @@ using namespace std;
 class Tracker
 {
 public:
-    // ros stuff
-    //image_transport::ImageTransport it_;
-    //image_transport::Subscriber image_sub_;
-    //image_transport::Publisher image_pub_;
-    //ros::NodeHandle nh_;
-    sensor_msgs::ImageConstPtr imageIn_;
-    cv_bridge::CvImagePtr imageOut_;
-
     // constructor
     Tracker(Ptr<Feature2D> _detector, Ptr<DescriptorMatcher> _matcher);
 
@@ -57,6 +49,7 @@ public:
     void drawFrameAxes();
     Mat getCurrentFrame();
     void acquirePixelImage(const sensor_msgs::ImageConstPtr& msg);
+    void setCameraParams(Mat cm, Mat dc);
 protected:
     cv_bridge::CvImagePtr cv_ptr;
     Ptr<Feature2D> detector;
@@ -75,6 +68,7 @@ protected:
     int nmatches;
     Mat rvec{3,1,cv::DataType<double>::type};
     Mat tvec{3,1,cv::DataType<double>::type};
+    Mat camera_matrix, dist_coeffs;
 };
 
 //#endif
