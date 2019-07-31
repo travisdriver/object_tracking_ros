@@ -5,6 +5,8 @@ using namespace std;
 
 const double NN_MATCH_RATIO = 0.75f; // nearest-neighbour matching ratio
 const double RANSAC_THRESH  = 2.5f;  // RANSAC inlier threshold
+const double ps = 0.0000035; // pixel size in meters
+
 //const Mat CAMERA_MAT = (Mat1d(3, 3) << 1158.03, 0.,      540.,
 //                                         0.,      1158.03, 360.,
 //                                         0.,      0.,      1.  );
@@ -20,7 +22,8 @@ image_transport::Subscriber img_sub;
 image_transport::Subscriber img_sub2;
 image_transport::Publisher img_pub;
 ros::Publisher pose_pub;
-sensor_msgs::ImagePtr msg;
+sensor_msgs::ImagePtr img_msg;
+geometry_msgs::Pose pose_msg;
 Mat outImg;
 
 Tracker::Tracker(Ptr<Feature2D> _detector, Ptr<DescriptorMatcher> _matcher)
@@ -46,10 +49,16 @@ void Tracker::setReferenceImg(const Mat img)
     ref_corners[3] = Point( 0, ref_img.rows );
 
     // set corners of reference image in 3D
-    ref_corners_3d[0] = Point3f(-ref_img.cols/2.,-ref_img.rows/2., 0.);
-    ref_corners_3d[1] = Point3f(-ref_img.cols/2., ref_img.rows/2., 0.);
-    ref_corners_3d[2] = Point3f( ref_img.cols/2., ref_img.rows/2., 0.);
-    ref_corners_3d[3] = Point3f( ref_img.cols/2.,-ref_img.rows/2., 0.);
+    //ref_corners_3d[0] = Point3f(-ref_img.cols/2.,-ref_img.rows/2., 0.);
+    //ref_corners_3d[1] = Point3f(-ref_img.cols/2., ref_img.rows/2., 0.);
+    //ref_corners_3d[2] = Point3f( ref_img.cols/2., ref_img.rows/2., 0.);
+    //ref_corners_3d[3] = Point3f( ref_img.cols/2.,-ref_img.rows/2., 0.);
+    double w = 171428.57;
+    double h = 57142.85;
+    ref_corners_3d[0] = Point3f(-w/2.,-h/2., 0.);
+    ref_corners_3d[1] = Point3f(-w/2., h/2., 0.);
+    ref_corners_3d[2] = Point3f( w/2., h/2., 0.);
+    ref_corners_3d[3] = Point3f( w/2.,-h/2., 0.);
 
     // set center of reference image
     ref_center[0] = Point(ref_img.cols/2., ref_img.rows/2.);
@@ -147,9 +156,9 @@ void Tracker::drawFrameAxes()
     // reference axis
     vector<Point3f> axis(4);
     axis[0] = Point3f(0,  0,  0);
-    axis[1] = Point3f(100, 0, 0);
-    axis[2] = Point3f(0, 100, 0);
-    axis[3] = Point3f(0, 0, 100);
+    axis[1] = Point3f(10000, 0, 0);
+    axis[2] = Point3f(0, 10000, 0);
+    axis[3] = Point3f(0, 0, 10000);
 
     // project axis onto object in frame
     vector<Point2f> projectedPts;
@@ -195,9 +204,9 @@ geometry_msgs::Pose Tracker::getPose()
     p.orientation.w = cos(theta/2);
 
     // add relative position to pose
-    p.position.x = tvec.at<double>(0,0);;
-    p.position.y = tvec.at<double>(1,0);;
-    p.position.z = tvec.at<double>(2,0);;
+    p.position.x = tvec.at<double>(0,0)*ps;
+    p.position.y = tvec.at<double>(1,0)*ps;
+    p.position.z = tvec.at<double>(2,0)*ps;
 
     return p;
 }
@@ -209,11 +218,11 @@ void Tracker::acquirePixelImage(const sensor_msgs::ImageConstPtr& image)
     cout << "Received image!" << endl;
     //cv_bridge::CvImagePtr cv_ptr;
     //imageIn_ = image;
-		cv_bridge::CvImagePtr cv_ptr;
+    cv_bridge::CvImagePtr cv_ptr;
     try
     {
         //imageOut_ = cv_bridge::toCvCopy(imageIn_, sensor_msgs::image_encodings::BGR8);
-				cv_ptr = cv_bridge::toCvCopy(image, sensor_msgs::image_encodings::BGR8);
+        cv_ptr = cv_bridge::toCvCopy(image, sensor_msgs::image_encodings::BGR8);
 
     }
     catch (cv_bridge::Exception& e)
@@ -226,23 +235,51 @@ void Tracker::acquirePixelImage(const sensor_msgs::ImageConstPtr& image)
     calcMatches();
 
     cout << getMatches() << endl;
-    if (getMatches() > 20)
+    if (getMatches() > 30)
     {
         getRelativePose();
 
-        cout << "rvec: " << getPoseRVec()*180./M_PI << endl; // radians
-        cout << "tvec: " << getPoseTVec()*0.00035 << endl; // mm
+        //cout << "rvec: " << getPoseRVec()*180./M_PI << endl; // radians
+        //cout << "tvec: " << getPoseTVec()*ps << endl; // m
+
+        // publish pose
+        pose_msg = getPose();
+        //pose_pub.publish(pose_msg);
 
         drawMyBoundingBox();
         drawFrameAxes();
     }
+    else
+    {
+        geometry_msgs::Pose p;
+        // axis-angle to quaternion and add to pose
+        p.orientation.x = sqrt(-1);
+        p.orientation.y = sqrt(-1);
+        p.orientation.z = sqrt(-1);
+        p.orientation.w = sqrt(-1);
+
+        // add relative position to pose
+        p.position.x = sqrt(-1);
+        p.position.y = sqrt(-1);
+        p.position.z = sqrt(-1);
+	pose_msg = p;
+    }
+
+    // publish pose
+    //pose_msg = getPose();
+    pose_pub.publish(pose_msg);
+    cout << "position:\n" << pose_msg.position << endl; // m
 
     // show image
     cv::resize(frm_img, outImg, cv::Size(), 0.33, 0.33);
+    imshow("res", outImg);
+    waitKey(2);
+
 
     // publish image
-    msg = cv_bridge::CvImage(std_msgs::Header(), "bgr8", outImg).toImageMsg();
-    img_pub.publish(msg);
+    img_msg = cv_bridge::CvImage(std_msgs::Header(), "bgr8", outImg).toImageMsg();
+    img_pub.publish(img_msg);
+
 }
 
 void testCallback(const sensor_msgs::ImageConstPtr& image)
@@ -262,8 +299,8 @@ void testCallback(const sensor_msgs::ImageConstPtr& image)
     Mat myimg = cv_ptr->image.clone(); // get a new frame from pixelink
 
     // show image
-    imshow("pub", myimg);
-    waitKey(2);
+    //imshow("pub", myimg);
+    //waitKey(2);
 }
 
 int main(int argc, char** argv)
@@ -275,29 +312,29 @@ int main(int argc, char** argv)
     Ptr<Feature2D> detector = ORB::create();
     Ptr<DescriptorMatcher> matcher = DescriptorMatcher::create("BruteForce-Hamming");
 
-		// camera params
-		Mat CAMERA_MAT = (Mat1d(3, 3) << 2373.287987, 0.000000, 1193.920583,
-						       0.000000, 2371.300868, 1096.973512,
-						       0.000000, 0.000000, 1.000000);
-
-		Mat DIST_COEFFS = (Mat1d(1, 4) << -0.299861, 0.247257, 0.003340, -0.000833, 0.000000);
+    // camera params
+    Mat CAMERA_MAT = (Mat1d(3, 3) << 2373.287987, 0.000000, 1193.920583,
+    				       0.000000, 2371.300868, 1096.973512,
+    				       0.000000, 0.000000, 1.000000);
+    
+    Mat DIST_COEFFS = (Mat1d(1, 4) << -0.299861, 0.247257, 0.003340, -0.000833, 0.000000);
 
     // initialize reference image
     Mat ref_img;
-		std::string img_path = ros::package::getPath("object_tracking_ros") + "/imgs/ida_pixelink.jpg";
+    std::string img_path = ros::package::getPath("object_tracking_ros") + "/imgs/ida_pixelink_rotated.jpeg";
     //ref_img = imread("/home/travisdriver/catkin_ws/src/object_tracking_ros/imgs/ida_pixelink.jpg");
-		std::cout << img_path << std::endl;
-		ref_img = imread(img_path);
-		if(ref_img.empty())
-		{
-			std::cout << "empty reference image" << std::endl;
-			return 0;
-		}
+    std::cout << img_path << std::endl;
+    ref_img = imread(img_path);
+    if(ref_img.empty())
+    {
+    	std::cout << "empty reference image" << std::endl;
+    	return 0;
+    }
 
     // initialize tracker
     Tracker tracker(detector, matcher);
     tracker.setReferenceImg(ref_img);
-		tracker.setCameraParams(CAMERA_MAT, DIST_COEFFS);
+    tracker.setCameraParams(CAMERA_MAT, DIST_COEFFS);
 
     // attempt to read pixelink image
     cout << "test" << endl;
@@ -305,8 +342,8 @@ int main(int argc, char** argv)
     image_transport::ImageTransport it(nh);
     img_sub = it.subscribe("/pixelink/image", 1, &Tracker::acquirePixelImage, &tracker);
     img_pub = it.advertise("/object_tracking_ros/image", 1);
-    img_sub2 = it.subscribe("object_tracking_ros/image", 1, testCallback);
-    pose_pub = nh.advertise<geometry_msgs::Pose>("object_tracking_ros/camera_pose",1);
+    img_sub2 = it.subscribe("/object_tracking_ros/image", 1, testCallback);
+    pose_pub = nh.advertise<geometry_msgs::Pose>("/object_tracking_ros/camera_pose",1);
 
     // run tracker and publish results
     ros::spin();
